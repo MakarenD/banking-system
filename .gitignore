@@ -1,0 +1,40 @@
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Coverage and test reports
+.coverage
+.coverage.*
+htmlcov/
+/coverage/
+coverage.xml
+junit.xml
+/reports/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Environment files and local secrets
+.env
+.env.*
+.secrets/
+secrets/
+
+# Logs
+*.log
+logs/
+
+# Editors and operating systems
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+Desktop.ini
