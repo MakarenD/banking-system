@@ -1,13 +1,19 @@
 """Account domain package."""
 
-from .enums import AccountStatus, Currency
+from .enums import AccountStatus, Currency, InvestmentAsset
 from .exceptions import (
     AccountClosedError,
     AccountFrozenError,
     InsufficientFundsError,
     InvalidOperationError,
 )
-from .models import AbstractAccount, BankAccount
+from .models import (
+    AbstractAccount,
+    BankAccount,
+    InvestmentAccount,
+    PremiumAccount,
+    SavingsAccount,
+)
 
 __all__ = [
     "AbstractAccount",
@@ -17,5 +23,9 @@ __all__ = [
     "BankAccount",
     "Currency",
     "InsufficientFundsError",
+    "InvestmentAccount",
+    "InvestmentAsset",
     "InvalidOperationError",
+    "PremiumAccount",
+    "SavingsAccount",
 ]

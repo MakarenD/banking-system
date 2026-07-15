@@ -2,7 +2,8 @@
 
 Banking System is a Python package for modelling core banking operations. The planned scope includes customer and account management, transaction processing, audit trails, and reporting.
 
-The project is in active development. It currently provides a validated bank account model and quality tooling.
+The project is in active development. It currently provides validated base, savings, premium,
+and investment account models together with quality tooling.
 
 ## Package architecture
 
@@ -33,6 +34,49 @@ print(account.balance)  # Decimal("1150")
 ```
 
 Frozen and closed accounts reject deposits and withdrawals with `AccountFrozenError` and `AccountClosedError`. A withdrawal that exceeds the available balance raises `InsufficientFundsError`.
+
+### Specialized accounts
+
+`SavingsAccount` preserves a configurable minimum balance. Its monthly interest rate is a
+decimal fraction, so `Decimal("0.01")` represents 1%. Calling `apply_monthly_interest()` applies
+one month of interest to the current balance.
+
+`PremiumAccount` supports a configurable per-withdrawal limit and overdraft. Each successful
+withdrawal charges its fixed fee in addition to the requested amount.
+
+`InvestmentAccount` maintains virtual positions in stocks, bonds, and ETFs separately from its
+cash balance. Position values and yearly growth rates are supplied as mappings. Growth rates are
+decimal fractions, and `project_yearly_growth()` returns the projected gain across the portfolio.
+
+```python
+from decimal import Decimal
+
+from banking_system.accounts import InvestmentAccount, PremiumAccount, SavingsAccount
+
+savings = SavingsAccount(
+    "Alice",
+    balance=1_000,
+    min_balance=250,
+    monthly_interest_rate=Decimal("0.01"),
+)
+savings.apply_monthly_interest()
+
+premium = PremiumAccount(
+    "Bob",
+    balance=500,
+    withdrawal_limit=10_000,
+    overdraft_limit=2_000,
+    fixed_fee=25,
+)
+premium.withdraw(1_000)  # Decimal("-525")
+
+investment = InvestmentAccount(
+    "Carol",
+    portfolio={"stocks": 1_000, "bonds": 500, "etf": 250},
+    yearly_growth_rates={"stocks": 0.1, "bonds": 0.05, "etf": -0.2},
+)
+investment.project_yearly_growth()  # Decimal("75.00")
+```
 
 ## Requirements
 
@@ -91,5 +135,5 @@ ruff format .
 
 ## Current limitations
 
-- Only the base bank account model and its in-memory operations are implemented.
+- Only account models and their in-memory operations are implemented.
 - Persistence and external integrations are not available.
