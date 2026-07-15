@@ -19,3 +19,11 @@ class Currency(StrEnum):
     EUR = "EUR"
     KZT = "KZT"
     CNY = "CNY"
+
+
+class InvestmentAsset(StrEnum):
+    """Virtual assets supported by investment accounts."""
+
+    STOCKS = "stocks"
+    BONDS = "bonds"
+    ETF = "etf"
