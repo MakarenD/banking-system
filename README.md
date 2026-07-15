@@ -1,9 +1,9 @@
 # Banking System
 
-Banking System is a Python package for modelling core banking operations. The planned scope includes customer and account management, transaction processing, audit trails, and reporting.
+Banking System is a Python package for modelling core banking operations.
 
 The project is in active development. It currently provides validated client and account models,
-specialized account types, and in-memory bank orchestration together with quality tooling.
+specialized account types, in-memory bank orchestration, and queued transaction processing.
 
 ## Package architecture
 
@@ -13,12 +13,11 @@ The source code uses a `src` layout and is divided into domain-oriented packages
 - `accounts` contains the account model, account states, currencies, and operation errors;
 - `clients` contains customer-related functionality;
 - `bank` coordinates operations across domains;
-- `transactions` contains transaction processing;
+- `transactions` contains transfer models, queues, currency conversion, and processing;
 - `audit` contains audit trail functionality;
 - `reports` contains reporting functionality.
 
-The `common`, `transactions`, `audit`, and `reports` packages currently define architectural
-boundaries only.
+The `common`, `audit`, and `reports` packages currently define architectural boundaries only.
 
 ## Accounts
 
@@ -121,6 +120,53 @@ suspicious. Search, authentication, and balance reports remain available during 
 `get_total_balance()` returns the nominal `Decimal` sum across registered accounts.
 `get_clients_ranking()` returns `(Client, Decimal)` pairs ordered by the same nominal balance.
 Balances in different currencies are not converted.
+
+## Transactions
+
+`Transaction` represents an internal or external transfer between two accounts. Transactions
+start in the pending state and retain their commission, processing attempts, failure reason, and
+creation, update, and completion timestamps. `TransactionQueue` supports integer priorities,
+with larger values processed first, delayed availability, FIFO ordering for equal priorities,
+and cancellation.
+
+`TransactionProcessor` applies a configurable percentage fee to external transfers, converts the
+amount deposited into the recipient account with explicit `Decimal` exchange rates, retries
+failed operations, and records each processing error. A standard account cannot transfer more
+than its available balance, while `PremiumAccount` can use its configured overdraft. Frozen or
+closed accounts cannot send or receive transfers.
+
+```python
+from decimal import Decimal
+
+from banking_system.accounts import BankAccount, Currency
+from banking_system.transactions import (
+    Transaction,
+    TransactionProcessor,
+    TransactionQueue,
+    TransactionType,
+)
+
+sender = BankAccount("Alice", balance=1_000, currency=Currency.USD)
+recipient = BankAccount("Bob", currency=Currency.EUR)
+transaction = Transaction(
+    TransactionType.EXTERNAL_TRANSFER,
+    100,
+    Currency.USD,
+    sender,
+    recipient,
+)
+
+queue = TransactionQueue()
+queue.add(transaction, priority=10)
+processor = TransactionProcessor(
+    exchange_rates={(Currency.USD, Currency.EUR): Decimal("0.92")},
+    external_fee_rate=Decimal("0.01"),
+)
+processor.process_queue(queue)
+
+assert transaction.commission == Decimal("1.00")
+assert recipient.balance == Decimal("92.00")
+```
 
 ## Requirements
 

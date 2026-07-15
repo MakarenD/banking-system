@@ -65,6 +65,9 @@ class AbstractAccount(ABC):
     def _set_status(self, status: AccountStatus | str) -> None:
         self._status = self._validate_status(status)
 
+    def _restore_balance(self, balance: Decimal) -> None:
+        self._balance = balance
+
     @abstractmethod
     def deposit(self, amount: Amount) -> Decimal:
         """Deposit funds and return the updated balance."""
