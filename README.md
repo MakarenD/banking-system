@@ -2,8 +2,8 @@
 
 Banking System is a Python package for modelling core banking operations. The planned scope includes customer and account management, transaction processing, audit trails, and reporting.
 
-The project is in active development. It currently provides validated base, savings, premium,
-and investment account models together with quality tooling.
+The project is in active development. It currently provides validated client and account models,
+specialized account types, and in-memory bank orchestration together with quality tooling.
 
 ## Package architecture
 
@@ -17,7 +17,8 @@ The source code uses a `src` layout and is divided into domain-oriented packages
 - `audit` contains audit trail functionality;
 - `reports` contains reporting functionality.
 
-The remaining packages define architectural boundaries only. Their domain models and services will be added as the project develops.
+The `common`, `transactions`, `audit`, and `reports` packages currently define architectural
+boundaries only.
 
 ## Accounts
 
@@ -78,6 +79,49 @@ investment = InvestmentAccount(
 investment.project_yearly_growth()  # Decimal("75.00")
 ```
 
+## Clients and bank operations
+
+`Client` stores a validated full name, age, identifier, contacts, account numbers, and access
+status. Clients must be at least 18 years old. `Bank` registers clients, opens accounts, manages
+account states, authenticates clients, and searches accounts by number or client name.
+
+```python
+from banking_system.accounts import SavingsAccount
+from banking_system.bank import Bank
+from banking_system.clients import Client
+
+bank = Bank("Example Bank")
+client = Client(
+    "Alice Smith",
+    30,
+    {"email": "alice@example.com"},
+    "correct-password",
+    client_id="client-1",
+)
+bank.add_client(client)
+
+account = bank.open_account(
+    client.client_id,
+    SavingsAccount,
+    balance=1_000,
+    min_balance=250,
+)
+bank.freeze_account(account.account_number)
+bank.unfreeze_account(account.account_number)
+
+assert bank.authenticate_client(client.client_id, "correct-password")
+assert bank.search_accounts("alice") == [account]
+```
+
+Three consecutive failed authentication attempts block the client and mark the activity as
+suspicious. Account-opening, closing, freezing, and unfreezing operations are unavailable from
+00:00 up to 05:00 local bank time; a restricted attempt also marks the client activity as
+suspicious. Search, authentication, and balance reports remain available during that interval.
+
+`get_total_balance()` returns the nominal `Decimal` sum across registered accounts.
+`get_clients_ranking()` returns `(Client, Decimal)` pairs ordered by the same nominal balance.
+Balances in different currencies are not converted.
+
 ## Requirements
 
 - Python 3.12 or later
@@ -135,5 +179,6 @@ ruff format .
 
 ## Current limitations
 
-- Only account models and their in-memory operations are implemented.
+- Client, account, and bank orchestration state is in memory only.
+- Cross-currency conversion is not available for totals or client rankings.
 - Persistence and external integrations are not available.
