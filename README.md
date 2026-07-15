@@ -2,21 +2,37 @@
 
 Banking System is a Python package for modelling core banking operations. The planned scope includes customer and account management, transaction processing, audit trails, and reporting.
 
-The project is in active development. It currently provides the package structure and quality tooling; banking business logic has not been implemented yet.
+The project is in active development. It currently provides a validated bank account model and quality tooling.
 
 ## Package architecture
 
 The source code uses a `src` layout and is divided into domain-oriented packages:
 
 - `common` contains shared domain utilities;
-- `accounts` contains account-related functionality;
+- `accounts` contains the account model, account states, currencies, and operation errors;
 - `clients` contains customer-related functionality;
 - `bank` coordinates operations across domains;
 - `transactions` contains transaction processing;
 - `audit` contains audit trail functionality;
 - `reports` contains reporting functionality.
 
-These packages define architectural boundaries only. Their domain models and services will be added as the project develops.
+The remaining packages define architectural boundaries only. Their domain models and services will be added as the project develops.
+
+## Accounts
+
+`AbstractAccount` defines the shared account interface for deposits, withdrawals, and account information. `BankAccount` is its concrete implementation and supports balances in RUB, USD, EUR, KZT, and CNY. New accounts are active by default and receive an eight-character UUID-based identifier when one is not provided. Deposits and withdrawals accept positive finite numeric amounts and return the updated `Decimal` balance.
+
+```python
+from banking_system.accounts import BankAccount, Currency
+
+account = BankAccount("Alice", balance=1_000, currency=Currency.USD)
+account.deposit(250)
+account.withdraw(100)
+
+print(account.balance)  # Decimal("1150")
+```
+
+Frozen and closed accounts reject deposits and withdrawals with `AccountFrozenError` and `AccountClosedError`. A withdrawal that exceeds the available balance raises `InsufficientFundsError`.
 
 ## Requirements
 
@@ -75,6 +91,5 @@ ruff format .
 
 ## Current limitations
 
-- Domain models and banking operations are not implemented.
+- Only the base bank account model and its in-memory operations are implemented.
 - Persistence and external integrations are not available.
-- The test suite currently verifies only that the package can be imported.
