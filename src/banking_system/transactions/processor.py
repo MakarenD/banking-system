@@ -13,6 +13,14 @@ from banking_system.accounts import (
     InvalidOperationError,
     PremiumAccount,
 )
+from banking_system.audit import (
+    AuditLevel,
+    AuditLog,
+    RiskAnalyzer,
+    RiskAssessment,
+    RiskBlockedError,
+    RiskLevel,
+)
 
 from .enums import TransactionStatus, TransactionType
 from .exceptions import ExchangeRateNotFoundError, TransactionStateError
@@ -41,6 +49,8 @@ class TransactionProcessor:
         external_fee_rate: Amount = Decimal("0.01"),
         max_retries: int = 0,
         clock: Callable[[], datetime] | None = None,
+        audit_log: AuditLog | None = None,
+        risk_analyzer: RiskAnalyzer | None = None,
     ) -> None:
         self._exchange_rates = self._validate_exchange_rates(exchange_rates)
         self._external_fee_rate = self._validate_non_negative_decimal(
@@ -52,6 +62,12 @@ class TransactionProcessor:
             raise ValueError("Maximum retries must not be negative")
         self._max_retries = max_retries
         self._clock = clock or (lambda: datetime.now(timezone.utc))
+        if audit_log is not None and not isinstance(audit_log, AuditLog):
+            raise TypeError("Audit log must be an AuditLog instance")
+        if risk_analyzer is not None and not isinstance(risk_analyzer, RiskAnalyzer):
+            raise TypeError("Risk analyzer must be a RiskAnalyzer instance")
+        self._audit_log = audit_log or AuditLog()
+        self._risk_analyzer = risk_analyzer or RiskAnalyzer()
         self._errors: list[TransactionErrorRecord] = []
 
     @property
@@ -72,6 +88,18 @@ class TransactionProcessor:
 
         return tuple(self._errors)
 
+    @property
+    def audit_log(self) -> AuditLog:
+        """Return the audit log used by this processor."""
+
+        return self._audit_log
+
+    @property
+    def risk_analyzer(self) -> RiskAnalyzer:
+        """Return the risk analyzer used by this processor."""
+
+        return self._risk_analyzer
+
     def process(self, transaction: Transaction) -> Transaction:
         """Process a pending transaction and return its terminal state."""
 
@@ -81,6 +109,18 @@ class TransactionProcessor:
             raise TransactionStateError(
                 f"Only pending transactions can be processed, got: {transaction.status.value}"
             )
+
+        assessment_timestamp = self._now()
+        assessment = self.risk_analyzer.analyze(transaction, at=assessment_timestamp)
+        self._record_assessment(assessment)
+        if assessment.level is RiskLevel.HIGH:
+            transaction._mark_processing(assessment_timestamp)
+            factors = ", ".join(factor.value for factor in assessment.factors)
+            error = RiskBlockedError(f"Transaction blocked due to high risk: {factors}")
+            error_timestamp = self._now()
+            self._record_error(transaction, 1, error, error_timestamp)
+            transaction._mark_failed(str(error), error_timestamp)
+            return transaction
 
         for attempt in range(1, self.max_retries + 2):
             timestamp = self._now()
@@ -95,6 +135,16 @@ class TransactionProcessor:
                     break
             else:
                 transaction._mark_completed(self._now())
+                self.risk_analyzer.record_completed(transaction)
+                self.audit_log.record(
+                    AuditLevel.INFO,
+                    "transaction_completed",
+                    "Transaction completed",
+                    transaction_id=transaction.transaction_id,
+                    account_number=transaction.sender.account_number,
+                    details={"risk_level": assessment.level.value},
+                    timestamp=transaction.processed_at,
+                )
                 break
 
         return transaction
@@ -183,6 +233,40 @@ class TransactionProcessor:
                 reason=str(error),
                 timestamp=timestamp,
             )
+        )
+        level = AuditLevel.CRITICAL if isinstance(error, RiskBlockedError) else AuditLevel.ERROR
+        self.audit_log.record(
+            level,
+            "transaction_error",
+            str(error),
+            transaction_id=transaction.transaction_id,
+            account_number=transaction.sender.account_number,
+            details={
+                "attempt": attempt,
+                "error_type": type(error).__name__,
+            },
+            timestamp=timestamp,
+        )
+
+    def _record_assessment(self, assessment: RiskAssessment) -> None:
+        level_by_risk = {
+            RiskLevel.LOW: AuditLevel.INFO,
+            RiskLevel.MEDIUM: AuditLevel.WARNING,
+            RiskLevel.HIGH: AuditLevel.CRITICAL,
+        }
+        self.audit_log.record(
+            level_by_risk[assessment.level],
+            "risk_assessment",
+            f"Transaction risk assessed as {assessment.level.value}",
+            transaction_id=assessment.transaction_id,
+            account_number=assessment.account_number,
+            details={
+                "recipient_account_number": assessment.recipient_account_number,
+                "risk_level": assessment.level.value,
+                "risk_score": assessment.score,
+                "risk_factors": [factor.value for factor in assessment.factors],
+            },
+            timestamp=assessment.timestamp,
         )
 
     def _now(self) -> datetime:

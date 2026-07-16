@@ -3,7 +3,8 @@
 Banking System is a Python package for modelling core banking operations.
 
 The project is in active development. It currently provides validated client and account models,
-specialized account types, in-memory bank orchestration, and queued transaction processing.
+specialized account types, in-memory bank orchestration, queued transaction processing, audit
+logging, risk controls, and audit reports.
 
 ## Package architecture
 
@@ -14,10 +15,10 @@ The source code uses a `src` layout and is divided into domain-oriented packages
 - `clients` contains customer-related functionality;
 - `bank` coordinates operations across domains;
 - `transactions` contains transfer models, queues, currency conversion, and processing;
-- `audit` contains audit trail functionality;
-- `reports` contains reporting functionality.
+- `audit` contains audit logging and transaction risk analysis;
+- `reports` contains reports derived from audit records.
 
-The `common`, `audit`, and `reports` packages currently define architectural boundaries only.
+The `common` package currently defines an architectural boundary only.
 
 ## Accounts
 
@@ -168,6 +169,49 @@ assert transaction.commission == Decimal("1.00")
 assert recipient.balance == Decimal("92.00")
 ```
 
+## Audit and risk controls
+
+Every `TransactionProcessor` evaluates transaction risk before changing account balances. The
+default analyzer detects amounts of at least 100,000 nominal currency units, an eleventh operation
+within one minute, first-time recipients, and operations from 00:00 up to 05:00 UTC. Thresholds,
+the frequency window, and the local timezone are configurable through `RiskAnalyzer`.
+
+Large or frequent operations are high risk by themselves. A first-time recipient or a night
+operation is medium risk, while their combination is high risk. High-risk transactions are marked
+as failed without changing either account balance or entering the retry loop.
+
+`AuditLog` always stores immutable records in memory and can also append each record to a JSON
+Lines file. Records can be filtered by importance, event type, transaction, or sender account.
+
+```python
+from pathlib import Path
+
+from banking_system.audit import AuditLog, RiskAnalyzer
+from banking_system.transactions import TransactionProcessor
+
+audit_log = AuditLog(Path("var/audit.jsonl"))
+processor = TransactionProcessor(
+    audit_log=audit_log,
+    risk_analyzer=RiskAnalyzer(large_amount_threshold=50_000),
+)
+
+processor.process(transaction)
+critical_records = audit_log.filter(level="critical")
+```
+
+`AuditReporter` returns suspicious transaction assessments, a client risk profile aggregated
+across the client's sender accounts, and transaction error counts grouped by exception type. The
+report links audit records through the account numbers exposed by `Client`.
+
+```python
+from banking_system.reports import AuditReporter
+
+reporter = AuditReporter(audit_log)
+suspicious_operations = reporter.suspicious_operations()
+profile = reporter.client_risk_profile(client)
+error_statistics = reporter.error_statistics()
+```
+
 ## Requirements
 
 - Python 3.12 or later
@@ -225,6 +269,7 @@ ruff format .
 
 ## Current limitations
 
-- Client, account, and bank orchestration state is in memory only.
+- Client, account, bank orchestration, and risk-analysis state is in memory only. Audit records can
+  additionally be appended to a local JSON Lines file.
 - Cross-currency conversion is not available for totals or client rankings.
-- Persistence and external integrations are not available.
+- Database persistence and external integrations are not available.
