@@ -8,7 +8,7 @@ logging, risk controls, and audit reports.
 
 ## Package architecture
 
-The source code uses a `src` layout and is divided into domain-oriented packages:
+The source code uses a `src` layout and is divided into domain-oriented packages and modules:
 
 - `common` contains shared domain utilities;
 - `accounts` contains the account model, account states, currencies, and operation errors;
@@ -17,6 +17,7 @@ The source code uses a `src` layout and is divided into domain-oriented packages
 - `transactions` contains transfer models, queues, currency conversion, and processing;
 - `audit` contains audit logging and transaction risk analysis;
 - `reports` contains reports derived from audit records.
+- `demo.py` runs a deterministic end-to-end simulation of the package.
 
 The `common` package currently defines an architectural boundary only.
 
@@ -211,6 +212,18 @@ suspicious_operations = reporter.suspicious_operations()
 profile = reporter.client_risk_profile(client)
 error_statistics = reporter.error_statistics()
 ```
+
+## Demonstration
+
+Run the complete deterministic simulation as a module:
+
+```bash
+python -m banking_system.demo
+```
+
+The program creates 6 clients, 12 RUB accounts, and 40 queued transactions. Its output shows
+queue, completion, and rejection events; one client's accounts, transaction history, and
+suspicious operations; and the top three clients, transaction statistics, and total balance.
 
 ## Requirements
 
