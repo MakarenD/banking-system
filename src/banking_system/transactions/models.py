@@ -34,6 +34,7 @@ class Transaction:
         self._currency = self._validate_currency(currency)
         self._sender, self._recipient = self._validate_accounts(sender, recipient)
         self._commission = Decimal("0")
+        self._received_amount: Decimal | None = None
         self._status = TransactionStatus.PENDING
         self._failure_reason: str | None = None
         self._attempts = 0
@@ -70,6 +71,12 @@ class Transaction:
         """Return the total commission charged to the sender."""
 
         return self._commission
+
+    @property
+    def received_amount(self) -> Decimal | None:
+        """Return the credited amount, or ``None`` before successful settlement."""
+
+        return self._received_amount
 
     @property
     def sender(self) -> BankAccount:
@@ -140,6 +147,7 @@ class Transaction:
             "amount": self.amount,
             "currency": self.currency.value,
             "commission": self.commission,
+            "received_amount": self.received_amount,
             "sender_account": self.sender.account_number,
             "recipient_account": self.recipient.account_number,
             "status": self.status.value,
@@ -161,6 +169,10 @@ class Transaction:
 
     def _set_commission(self, commission: Decimal, timestamp: datetime) -> None:
         self._commission = commission
+        self._updated_at = self._normalize_timestamp(timestamp)
+
+    def _set_received_amount(self, received_amount: Decimal, timestamp: datetime) -> None:
+        self._received_amount = received_amount
         self._updated_at = self._normalize_timestamp(timestamp)
 
     def _mark_completed(self, timestamp: datetime) -> None:

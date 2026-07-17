@@ -4,7 +4,7 @@ Banking System is a Python package for modelling core banking operations.
 
 The project is in active development. It currently provides validated client and account models,
 specialized account types, in-memory bank orchestration, queued transaction processing, audit
-logging, risk controls, and audit reports.
+logging, risk controls, reporting, and matplotlib visualizations.
 
 ## Package architecture
 
@@ -16,7 +16,7 @@ The source code uses a `src` layout and is divided into domain-oriented packages
 - `bank` coordinates operations across domains;
 - `transactions` contains transfer models, queues, currency conversion, and processing;
 - `audit` contains audit logging and transaction risk analysis;
-- `reports` contains reports derived from audit records.
+- `reports` contains typed client, bank, and risk reports, file exports, and charts;
 - `demo.py` runs a deterministic end-to-end simulation of the package.
 
 The `common` package currently defines an architectural boundary only.
@@ -213,6 +213,46 @@ profile = reporter.client_risk_profile(client)
 error_statistics = reporter.error_statistics()
 ```
 
+## Reporting and visualization
+
+`ReportBuilder` creates client, bank, and risk reports from a `Bank`, its processed
+`Transaction` objects, and the same audit and risk components used by
+`TransactionProcessor`. One report snapshot can be rendered as text or exported as UTF-8 JSON
+and CSV.
+
+```python
+from io import StringIO
+
+from banking_system.demo import run_demo
+from banking_system.reports import ReportBuilder
+
+demo = run_demo(stream=StringIO())
+builder = ReportBuilder(
+    demo.bank,
+    demo.transactions,
+    audit_log=demo.audit_log,
+    risk_analyzer=demo.risk_analyzer,
+)
+
+client_report = builder.build_client_report(demo.selected_client.client_id)
+bank_report = builder.build_bank_report()
+risk_report = builder.build_risk_report()
+
+print(builder.render_text(client_report))
+builder.export_to_json(bank_report, "reports/example")
+builder.export_to_csv(risk_report, "reports/example")
+builder.save_charts("reports/example", client_id=demo.selected_client.client_id)
+```
+
+The bank report groups balances, successful transaction amounts, and client rankings by currency.
+It does not combine currencies without an exchange-rate context. The three PNG charts show transaction
+statuses, transaction activity by client, and account balance histories. Balance histories are
+reconstructed from completed settlements and current balances; sender changes include commissions,
+and recipient changes use the converted amount stored by the transaction processor.
+
+Exports refuse to replace existing files by default. Pass `overwrite=True` only when replacing
+known output from an earlier run.
+
 ## Demonstration
 
 Run the complete deterministic simulation as a module:
@@ -223,7 +263,12 @@ python -m banking_system.demo
 
 The program creates 6 clients, 12 RUB accounts, and 40 queued transactions. Its output shows
 queue, completion, and rejection events; one client's accounts, transaction history, and
-suspicious operations; and the top three clients, transaction statistics, and total balance.
+suspicious operations; and the top three clients, transaction statistics, and total balance. It
+then builds all three report categories and writes repeatable artifacts to `reports/demo/`:
+
+- `client_report.json`, `bank_report.json`, and `risk_report.json`;
+- `client_report.csv`, `bank_report.csv`, and `risk_report.csv`;
+- `transaction_statuses.png`, `client_activity.png`, and `balance_history.png`.
 
 ## Requirements
 
@@ -255,7 +300,7 @@ python -m pip install --editable .
 python -m pip install --requirement requirements-dev.txt
 ```
 
-The project currently has no third-party runtime dependencies.
+The editable installation includes matplotlib for PNG chart generation.
 
 ## Tests
 
@@ -263,6 +308,12 @@ Run the test suite with:
 
 ```bash
 pytest
+```
+
+Run only the reporting unit and integration scenarios with:
+
+```bash
+pytest tests/unit/test_reporting.py tests/integration/test_reporting_workflow.py
 ```
 
 ## Code quality
@@ -285,4 +336,6 @@ ruff format .
 - Client, account, bank orchestration, and risk-analysis state is in memory only. Audit records can
   additionally be appended to a local JSON Lines file.
 - Cross-currency conversion is not available for totals or client rankings.
+- Balance history is transaction-derived. Direct deposits, withdrawals, interest accruals, or an
+  incomplete transaction list cannot be reconstructed as historical events.
 - Database persistence and external integrations are not available.

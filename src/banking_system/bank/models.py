@@ -36,6 +36,18 @@ class Bank:
         self._accounts: dict[str, BankAccount] = {}
         self._account_owners: dict[str, str] = {}
 
+    @property
+    def clients(self) -> tuple[Client, ...]:
+        """Return an immutable snapshot of registered clients."""
+
+        return tuple(self._clients.values())
+
+    @property
+    def accounts(self) -> tuple[BankAccount, ...]:
+        """Return an immutable snapshot of registered accounts."""
+
+        return tuple(self._accounts.values())
+
     def add_client(self, client: Client) -> Client:
         """Register and return a client."""
 
@@ -148,6 +160,33 @@ class Bank:
                 matches.append(account)
 
         return sorted(matches, key=lambda account: account.account_number.casefold())
+
+    def get_client(self, client_id: str) -> Client:
+        """Return a registered client or raise ``ClientNotFoundError``."""
+
+        return self._get_client(client_id)
+
+    def get_account(self, account_number: str) -> BankAccount:
+        """Return a registered account or raise ``AccountNotFoundError``."""
+
+        account, _ = self._get_account_and_client(account_number)
+        return account
+
+    def get_client_accounts(self, client_id: str) -> tuple[BankAccount, ...]:
+        """Return accounts owned by a registered client."""
+
+        client = self._get_client(client_id)
+        return tuple(
+            account
+            for account_number, account in self._accounts.items()
+            if self._account_owners[account_number] == client.client_id
+        )
+
+    def get_account_owner(self, account_number: str) -> Client:
+        """Return the client who owns a registered account."""
+
+        _, client = self._get_account_and_client(account_number)
+        return client
 
     def get_total_balance(self) -> Decimal:
         """Return the nominal total of all registered account balances."""
