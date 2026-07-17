@@ -1,16 +1,19 @@
 """Deterministic end-to-end demonstration of the banking system."""
 
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from itertools import count as counter
+from pathlib import Path
 from typing import TextIO
 
 from banking_system.accounts import BankAccount, Currency
 from banking_system.audit import AuditLevel, AuditLog, AuditRecord, RiskAnalyzer
 from banking_system.bank import Bank
 from banking_system.clients import Client
-from banking_system.reports import AuditReporter, ErrorStatistics
+from banking_system.reports import AuditReporter, ErrorStatistics, Report, ReportBuilder
 from banking_system.transactions import (
     Transaction,
     TransactionProcessor,
@@ -58,6 +61,8 @@ class DemoResult:
     clients: tuple[Client, ...]
     accounts: tuple[BankAccount, ...]
     transactions: tuple[Transaction, ...]
+    audit_log: AuditLog
+    risk_analyzer: RiskAnalyzer
     event_log: tuple[AuditRecord, ...]
     selected_client: Client
     selected_accounts: tuple[BankAccount, ...]
@@ -69,6 +74,15 @@ class DemoResult:
     total_balance: Decimal
 
 
+@dataclass(frozen=True, slots=True)
+class ReportingDemoResult:
+    """Reports and files produced by the reporting demonstration."""
+
+    demo: DemoResult
+    reports: tuple[Report, ...]
+    files: tuple[Path, ...]
+
+
 def run_demo(*, stream: TextIO | None = None) -> DemoResult:
     """Run the deterministic simulation, render it, and return its complete result."""
 
@@ -76,13 +90,14 @@ def run_demo(*, stream: TextIO | None = None) -> DemoResult:
     transactions = _create_transactions(accounts)
     audit_log = AuditLog(clock=lambda: _DEMO_TIME)
     queue = TransactionQueue(clock=lambda: _DEMO_TIME)
+    risk_analyzer = RiskAnalyzer(
+        large_amount_threshold=100_000,
+        frequent_operations_threshold=11,
+    )
     processor = TransactionProcessor(
-        clock=lambda: _DEMO_TIME,
+        clock=_incrementing_clock(),
         audit_log=audit_log,
-        risk_analyzer=RiskAnalyzer(
-            large_amount_threshold=100_000,
-            frequent_operations_threshold=11,
-        ),
+        risk_analyzer=risk_analyzer,
         max_retries=0,
     )
 
@@ -136,6 +151,8 @@ def run_demo(*, stream: TextIO | None = None) -> DemoResult:
         clients=clients,
         accounts=accounts,
         transactions=processed_transactions,
+        audit_log=audit_log,
+        risk_analyzer=risk_analyzer,
         event_log=event_log,
         selected_client=selected_client,
         selected_accounts=selected_accounts,
@@ -150,10 +167,56 @@ def run_demo(*, stream: TextIO | None = None) -> DemoResult:
     return result
 
 
-def main() -> None:
-    """Run the demonstration as a module."""
+def run_reporting_demo(
+    destination: str | Path = Path("reports/demo"),
+    *,
+    stream: TextIO | None = None,
+) -> ReportingDemoResult:
+    """Run the simulation and export deterministic reports and charts."""
 
-    run_demo()
+    output = stream if stream is not None else sys.stdout
+    demo = run_demo(stream=output)
+    builder = ReportBuilder(
+        demo.bank,
+        demo.transactions,
+        audit_log=demo.audit_log,
+        risk_analyzer=demo.risk_analyzer,
+        clock=lambda: _DEMO_TIME,
+    )
+    reports = (
+        builder.build_client_report(demo.selected_client.client_id),
+        builder.build_bank_report(),
+        builder.build_risk_report(),
+    )
+    output.write("\nReporting demonstration\n")
+    output.write(builder.render_text(reports[0]))
+
+    files: list[Path] = []
+    for report in reports:
+        files.append(builder.export_to_json(report, destination, overwrite=True))
+        files.append(builder.export_to_csv(report, destination, overwrite=True))
+    files.extend(
+        builder.save_charts(
+            destination,
+            client_id=demo.selected_client.client_id,
+            overwrite=True,
+        )
+    )
+    output.write("Created files\n")
+    for path in files:
+        output.write(f"- {path.resolve()}\n")
+    return ReportingDemoResult(demo=demo, reports=reports, files=tuple(files))
+
+
+def main() -> None:
+    """Run the complete demonstration and export reporting artifacts."""
+
+    run_reporting_demo()
+
+
+def _incrementing_clock() -> Callable[[], datetime]:
+    ticks = counter()
+    return lambda: _DEMO_TIME + timedelta(microseconds=next(ticks))
 
 
 def _initialize_bank() -> tuple[Bank, tuple[Client, ...], tuple[BankAccount, ...]]:

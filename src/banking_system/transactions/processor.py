@@ -202,6 +202,9 @@ class TransactionProcessor:
         try:
             transaction.sender.withdraw(transaction.amount + external_fee)
             transaction.recipient.deposit(received_amount)
+            # The credited amount is stored only after both balance mutations succeed;
+            # failed and rolled-back attempts must not look settled to report consumers.
+            transaction._set_received_amount(received_amount, timestamp)
         except Exception:
             transaction.sender._restore_balance(sender_balance)
             transaction.recipient._restore_balance(recipient_balance)

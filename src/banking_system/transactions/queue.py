@@ -1,3 +1,5 @@
+"""Priority queue for pending transactions."""
+
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone

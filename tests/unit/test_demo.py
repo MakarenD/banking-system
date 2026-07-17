@@ -1,7 +1,8 @@
 from io import StringIO
+from pathlib import Path
 
 from banking_system.audit import RiskLevel
-from banking_system.demo import DemoResult, run_demo
+from banking_system.demo import DemoResult, run_demo, run_reporting_demo
 from banking_system.transactions import TransactionStatus
 
 
@@ -116,3 +117,13 @@ def test_demo_renders_every_public_scenario_and_report() -> None:
     assert "Top 3 clients" in output
     assert "Transaction statistics" in output
     assert "Total balance" in output
+
+
+def test_reporting_demo_exports_repeatable_reports_and_charts(tmp_path: Path) -> None:
+    first = run_reporting_demo(tmp_path, stream=StringIO())
+    second = run_reporting_demo(tmp_path, stream=StringIO())
+
+    assert len(first.reports) == 3
+    assert first.files == second.files
+    assert len(first.files) == 9
+    assert all(path.exists() and path.stat().st_size > 0 for path in first.files)
