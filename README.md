@@ -178,8 +178,9 @@ within one minute, first-time recipients, and operations from 00:00 up to 05:00 
 the frequency window, and the local timezone are configurable through `RiskAnalyzer`.
 
 Large or frequent operations are high risk by themselves. A first-time recipient or a night
-operation is medium risk, while their combination is high risk. High-risk transactions are marked
-as failed without changing either account balance or entering the retry loop.
+operation is medium risk, while their combination is high risk. Night operations are blocked
+regardless of the aggregate risk level. They and all other high-risk transactions are marked as
+failed without changing either account balance or entering the retry loop.
 
 `AuditLog` always stores immutable records in memory and can also append each record to a JSON
 Lines file. Records can be filtered by importance, event type, transaction, or sender account.

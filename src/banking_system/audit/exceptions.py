@@ -2,4 +2,4 @@
 
 
 class RiskBlockedError(ValueError):
-    """Raised internally when a high-risk transaction is blocked."""
+    """Raised internally when risk controls block a transaction."""
