@@ -19,6 +19,7 @@ from banking_system.audit import (
     RiskAnalyzer,
     RiskAssessment,
     RiskBlockedError,
+    RiskFactor,
     RiskLevel,
 )
 
@@ -113,10 +114,19 @@ class TransactionProcessor:
         assessment_timestamp = self._now()
         assessment = self.risk_analyzer.analyze(transaction, at=assessment_timestamp)
         self._record_assessment(assessment)
-        if assessment.level is RiskLevel.HIGH:
+        # Restricted hours are a hard business rule, so the night factor blocks
+        # independently of the aggregate risk level.
+        blocked_for_night = RiskFactor.NIGHT_OPERATION in assessment.factors
+        if assessment.level is RiskLevel.HIGH or blocked_for_night:
             transaction._mark_processing(assessment_timestamp)
             factors = ", ".join(factor.value for factor in assessment.factors)
-            error = RiskBlockedError(f"Transaction blocked due to high risk: {factors}")
+            if blocked_for_night:
+                error = RiskBlockedError(
+                    "Transaction blocked during restricted hours "
+                    f"(00:00 to 05:00): {RiskFactor.NIGHT_OPERATION.value}"
+                )
+            else:
+                error = RiskBlockedError(f"Transaction blocked due to high risk: {factors}")
             error_timestamp = self._now()
             self._record_error(transaction, 1, error, error_timestamp)
             transaction._mark_failed(str(error), error_timestamp)

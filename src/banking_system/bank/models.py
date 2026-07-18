@@ -125,13 +125,15 @@ class Bank:
         account._set_status(AccountStatus.ACTIVE)
         return account
 
-    def authenticate_client(self, client_id: str, password: str) -> bool:
+    def authenticate_client(self, client_id: str, password: object) -> bool:
         """Authenticate a client and apply the consecutive-failure limit."""
 
         client = self._clients.get(client_id.strip()) if isinstance(client_id, str) else None
         if client is None or client.status is ClientStatus.BLOCKED:
             return False
-        if client._verify_password(password):
+        # The public boundary normalizes invalid secret types to ordinary failures
+        # instead of exposing the stricter password verifier contract.
+        if isinstance(password, str) and client._verify_password(password):
             client._reset_failed_authentication()
             return True
 

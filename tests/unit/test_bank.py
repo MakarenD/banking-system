@@ -255,6 +255,33 @@ def test_empty_password_counts_as_failed_authentication() -> None:
     assert client.suspicious_activity is True
 
 
+@pytest.mark.parametrize("password", [None, 123, True, b"password", object()])
+def test_invalid_password_types_count_as_failed_authentication(password: object) -> None:
+    bank = make_bank()
+    client = bank.add_client(make_client())
+
+    for expected_attempts in range(1, 4):
+        assert bank.authenticate_client(client.client_id, password) is False
+        assert client.failed_authentication_attempts == expected_attempts
+
+    assert client.status is ClientStatus.BLOCKED
+    assert client.suspicious_activity is True
+    assert bank.authenticate_client(client.client_id, "correct-password") is False
+
+
+@pytest.mark.parametrize("failed_attempts", [1, 2])
+def test_successful_authentication_resets_invalid_type_failures(failed_attempts: int) -> None:
+    bank = make_bank()
+    client = bank.add_client(make_client())
+
+    for _ in range(failed_attempts):
+        assert bank.authenticate_client(client.client_id, None) is False
+
+    assert bank.authenticate_client(client.client_id, "correct-password") is True
+    assert client.failed_authentication_attempts == 0
+    assert client.status is ClientStatus.ACTIVE
+
+
 def test_authentication_does_not_reveal_unknown_client() -> None:
     assert make_bank().authenticate_client("missing-client", "any-password") is False
 
